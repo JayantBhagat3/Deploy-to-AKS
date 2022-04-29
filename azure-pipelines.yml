@@ -1,0 +1,72 @@
+
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'
+  imagerepo: SampleApp
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'ACRconnection'
+        repository: '$(imagerepo)'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
+        tags: |
+          $(tag)
+          latest
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Pipeline.Workspace)/s/Kubernetes'
+        ArtifactName: 'Manifests'
+        publishLocation: 'Container'
+
+- stage: Deploy
+  displayName: Deploy to Dev
+  dependsOn: Build
+  variables:
+    acrsecret: demoacraksconnection
+  jobs:
+  - job: Deploy
+    displayName: Deploy to AKS
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+
+    - task: DownloadBuildArtifacts@1
+      inputs:
+        buildType: 'current'
+        downloadType: 'single'
+        artifactName: 'Manifests'
+        downloadPath: '$(Pipeline.Workspace)/Manifests'
+        
+    - task: KubernetesManifest@0
+      inputs:
+        action: 'createSecret'
+        kubernetesServiceConnection: 'AKSconnection'
+        namespace: 'defualt'
+        secretType: 'dockerRegistry'
+        secretName: '$(acrsecret)'
+        dockerRegistryEndpoint: 'ACRconnection'
+    - task: KubernetesManifest@0
+      inputs:
+        action: 'deploy'
+        kubernetesServiceConnection: 'AKSconnection'
+        namespace: 'default'
+        manifests: |
+          $(System.ArtifactsDirectory)/Manifests/deployment.yml
+          $(System.ArtifactsDirectory)/Manifests/service.yml
