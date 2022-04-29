@@ -51,7 +51,7 @@ stages:
       inputs:
         buildType: 'current'
         artifactName: 'Manifests'
-        targetPath: '$(Pipeline.Workspace)/Manifests'
+        targetPath: '$(Pipeline.Workspace)'
         
     - task: KubernetesManifest@0
       inputs:
